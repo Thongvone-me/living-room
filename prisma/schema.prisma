@@ -1,0 +1,184 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Gender {
+  male
+  female
+}
+
+enum UserRole {
+  admin
+  staff
+}
+
+enum RoomStatus {
+  available
+  occupied
+  reserved
+}
+
+enum ContractStatus {
+  active
+  expired
+  terminated
+}
+
+enum BookingStatus {
+  pending
+  confirmed
+  cancelled
+}
+
+enum StayStatus {
+  ongoing
+  completed
+}
+
+enum PaymentMethod {
+  cash
+  credit_card
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  failed
+}
+
+model User {
+  user_id    Int       @id @default(autoincrement())
+  first_name String    @db.VarChar(100)
+  last_name  String    @db.VarChar(100)
+  gender     Gender
+  role       UserRole
+  password   String    @db.VarChar(300)
+  email      String    @db.VarChar(60) @unique
+  phone      String    @db.VarChar(13)
+  profile    String?   @db.Text
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+
+  payments       Payment[]
+  notifications  Notification[]
+}
+
+model Tenant {
+  tenant_id  Int       @id @default(autoincrement())
+  first_name String    @db.VarChar(100)
+  last_name  String    @db.VarChar(100)
+  gender     Gender
+  email      String    @db.VarChar(60) @unique
+  phone      String    @db.VarChar(13)
+  dob        DateTime
+  profile    String?   @db.Text
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+
+  bookings        Booking[]
+  stays           Stay[]
+  rentalContracts RentalContract[]
+  payments        Payment[]
+  notifications   Notification[]
+}
+
+model RoomType {
+  roomtype_id Int       @id @default(autoincrement())
+  name        String    @db.VarChar(50)
+  description String?   @db.Text
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+
+  rooms Room[]
+}
+
+model Room {
+  room_id      Int       @id @default(autoincrement())
+  room_number  String    @db.VarChar(10)
+  floor        Int
+  roomtype_id  Int
+  status       RoomStatus
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+
+  roomType        RoomType @relation(fields: [roomtype_id], references: [roomtype_id])
+  rentalContracts RentalContract[]
+  bookings        Booking[]
+  stays           Stay[]
+}
+
+model RentalContract {
+  rentalcontract_id Int      @id @default(autoincrement())
+  tenant_id         Int
+  room_id           Int
+  start_date        DateTime
+  end_date          DateTime
+  rent_amount       Decimal  @db.Decimal(10, 2)
+  deposit           Decimal  @db.Decimal(10, 2)
+  status            ContractStatus
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenant_id], references: [tenant_id])
+  room   Room   @relation(fields: [room_id], references: [room_id])
+}
+
+model Booking {
+  booking_id   Int       @id @default(autoincrement())
+  tenant_id    Int
+  room_id      Int
+  booking_date DateTime
+  status       BookingStatus
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenant_id], references: [tenant_id])
+  room   Room   @relation(fields: [room_id], references: [room_id])
+}
+
+model Stay {
+  stay_id    Int       @id @default(autoincrement())
+  tenant_id  Int
+  room_id    Int
+  check_in   DateTime
+  check_out  DateTime
+  status     StayStatus
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenant_id], references: [tenant_id])
+  room     Room     @relation(fields: [room_id], references: [room_id])
+  payments Payment[]
+}
+
+model Payment {
+  payment_id   Int       @id @default(autoincrement())
+  tenant_id    Int
+  user_id      Int
+  stay_id      Int
+  amount       Decimal   @db.Decimal(10, 2)
+  payment_date DateTime
+  method       PaymentMethod
+  status       PaymentStatus
+
+  tenant Tenant @relation(fields: [tenant_id], references: [tenant_id])
+  user   User   @relation(fields: [user_id], references: [user_id])
+  stay   Stay   @relation(fields: [stay_id], references: [stay_id])
+}
+
+model Notification {
+  notification_id Int       @id @default(autoincrement())
+  tenant_id       Int
+  user_id         Int
+  message         String    @db.Text
+  is_read         Boolean   @default(false)
+  created_at      DateTime  @default(now())
+
+  tenant Tenant @relation(fields: [tenant_id], references: [tenant_id])
+  user   User   @relation(fields: [user_id], references: [user_id])
+}
