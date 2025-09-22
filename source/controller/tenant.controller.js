@@ -1,8 +1,10 @@
 
 import { PrismaClient } from "@prisma/client";
 import { SendSuccess, SendCreate, SendError } from "../service/response.js";
-import { validateData } from "../service/validate.js";
+import { validateData } from "../service/validateData.js";
 import { getLaosTime } from "../service/getLaosTime.js";
+import { deleteCloudinaryImage } from "../service/deleteCloudinaryImage.js";
+import { ResponseMessages } from "../service/responseMessages.js";
 
 
 export default class TenantController {
@@ -32,6 +34,14 @@ export default class TenantController {
         return SendError(res, 400, "BadRequest: " + validate.join(", "));
       }
       const prisma = new PrismaClient();
+      const existingEmail = await prisma.tenant.findFirst({ where: { email } });
+      const existingPhone = await prisma.tenant.findFirst({ where: { phone: phone ? String(phone) : null } });
+      let duplicateMsg = [];
+      if (existingEmail) duplicateMsg.push('email');
+      if (existingPhone) duplicateMsg.push('phone');
+      if (duplicateMsg.length > 0) {
+        return SendError(res, 400, 'Already exists: ' + duplicateMsg.join(', '));
+      }
       const laosTime = getLaosTime();
       const tenant = await prisma.tenant.create({
         data: {
@@ -59,6 +69,7 @@ export default class TenantController {
       const tenants = await prisma.tenant.findMany();
       return SendSuccess(res, "All tenants fetched", tenants);
     } catch (error) {
+      console.error("Tenant getAll error:", error);
       return SendError(res, 500, "ServerInternal", error);
     }
   }
@@ -93,10 +104,14 @@ export default class TenantController {
         email,
         phone,
         dob,
-        profile
+        profile: profileFromBody
       } = req.body;
       const prisma = new PrismaClient();
       const laosTime = getLaosTime();
+      const currentTenant = await prisma.tenant.findFirst({
+        where: { tenant_id }
+      });
+      const profile = req.file ? req.file.path : (profileFromBody || (currentTenant && currentTenant.profile));
       const updatedTenant = await prisma.tenant.update({
         where: { tenant_id },
         data: { 
@@ -105,12 +120,12 @@ export default class TenantController {
           gender,
           email,
           phone,
-          dob,
+          dob: dob? new Date(dob) : (currentTenant && currentTenant.dob),
           profile,
           updated_at: laosTime
         },
       });
-      return SendSuccess(res, "Tenant updated", updatedTenant);
+  return SendSuccess(res, ResponseMessages.Success.Update, updatedTenant);
     } catch (error) {
       return SendError(res, 500, "ServerInternal", error);
     }
@@ -123,8 +138,13 @@ export default class TenantController {
         return SendError(res, 400, "BadRequest: Invalid tenant_id");
       }
       const prisma = new PrismaClient();
+      const tenant = await prisma.tenant.findFirst({ where: { tenant_id } });
+      if (!tenant) {
+        return SendError(res, 404, "NotFound: tenant");
+      }
+      await deleteCloudinaryImage(tenant.profile);
       const deletedTenant = await prisma.tenant.delete({ where: { tenant_id } });
-      return SendSuccess(res, "Tenant deleted", deletedTenant);
+  return SendSuccess(res, ResponseMessages.Success.Delete, deletedTenant);
     } catch (error) {
       return SendError(res, 500, "ServerInternal", error);
     }

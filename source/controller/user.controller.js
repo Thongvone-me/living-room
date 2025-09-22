@@ -1,16 +1,10 @@
 import { PrismaClient } from "@prisma/client";
-import { ErrorMessage, SuccessMessage } from "../service/message.js";
+import { deleteCloudinaryImage } from "../service/deleteCloudinaryImage.js";
+import { ResponseMessages } from "../service/responseMessages.js";
 import { SendSuccess, SendCreate, SendError } from "../service/response.js";
-import { validateData } from "../service/validate.js";
+import { validateData } from "../service/validateData.js";
 import { getLaosTime } from "../service/getLaosTime.js";
-import {
-  CheckPassword,
-  Encrypt,
-  FindOneUser,
-  GenerateToken,
-  Decrypt,
-  VerifyRefreshToken
-} from "../service/service.js";
+import { CheckPassword, Encrypt, FindOneUser, GenerateToken, Decrypt, VerifyRefreshToken } from "../service/userService.js";
 
 
 export default class UserController {
@@ -19,13 +13,13 @@ export default class UserController {
     try {
       const { refreshToken } = req.body;
       if (!refreshToken) {
-        return SendError(res, 400, ErrorMessage.BadRequest, "refreshToken");
+        return SendError(res, 400, ResponseMessages.Error.BadRequest, "refreshToken");
       }
       const result = await VerifyRefreshToken(refreshToken);
-      if (!result) return SendError(res, 404, ErrorMessage.NotFound);
-      return SendSuccess(res, SuccessMessage.Update, result);
+      if (!result) return SendError(res, 404, ResponseMessages.Error.NotFound);
+      return SendSuccess(res, ResponseMessages.Success.Update, result);
     } catch (error) {
-      return SendError(res, 500, ErrorMessage.ServerInternal, error);
+      return SendError(res, 500, ResponseMessages.Error.ServerInternal, error);
     }
   }
 
@@ -53,14 +47,22 @@ export default class UserController {
         profile
       });
       if (validate.length > 0) {
-        return SendError(res, 400, ErrorMessage.BadRequest + validate.join(","));
+        return SendError(res, 400, ResponseMessages.Error.BadRequest + validate.join(","));
+      }
+      const prisma = new PrismaClient();
+      const existingEmail = await prisma.user.findFirst({ where: { email } });
+      const existingPhone = await prisma.user.findFirst({ where: { phone: phone ? String(phone) : null } });
+      let duplicateMsg = [];
+      if (existingEmail) duplicateMsg.push('email');
+      if (existingPhone) duplicateMsg.push('phone');
+      if (duplicateMsg.length > 0) {
+        return SendError(res, 400, 'Already exists: ' + duplicateMsg.join(', '));
       }
       const generatePassword = await Encrypt(password);
       if (!generatePassword) {
-        return SendError(res, 400, ErrorMessage.BadRequest);
+        return SendError(res, 400, ResponseMessages.Error.BadRequest);
       }
       await CheckPassword(password);
-      const prisma = new PrismaClient();
       const laosTime = getLaosTime();
       const user = await prisma.user.create({
         data: {
@@ -77,12 +79,12 @@ export default class UserController {
         },
       });
       if (!user) {
-        return SendError(res, 404, ErrorMessage.ErrorInsert);
+        return SendError(res, 404, ResponseMessages.Error.Insert);
       }
       user.password = undefined;
-      return SendCreate(res, SuccessMessage.Register, user);
+      return SendCreate(res, ResponseMessages.Success.Register, user);
     } catch (error) {
-      return SendError(res, 500, ErrorMessage.ServerInternal, error);
+      return SendError(res, 500, ResponseMessages.Error.ServerInternal, error);
     }
   }
 
@@ -91,15 +93,15 @@ export default class UserController {
       const { password, email } = req.body;
       const validate = await validateData({ password, email });
       if (validate.length > 0) {
-        return SendError(res, 400, `${ErrorMessage.BadRequest}: ${validate.join(", ")}`);
+        return SendError(res, 400, `${ResponseMessages.Error.BadRequest}: ${validate.join(", ")}`);
       }
       const user = await FindOneUser(email);
       if (!user) {
-        return SendError(res, 404, ErrorMessage.NotFound);
+        return SendError(res, 404, ResponseMessages.Error.EmailNotValid);
       }
       const decode = await Decrypt(user.password);
       if (password !== decode) {
-        return SendError(res, 404, ErrorMessage.IsNotMatch);
+        return SendError(res, 404, ResponseMessages.Error.PasswordsNotMatch);
       }
       user.password = undefined;
       const token = await GenerateToken(user.user_id);
@@ -107,10 +109,9 @@ export default class UserController {
         JSON.parse(JSON.stringify(user)),
         JSON.parse(JSON.stringify(token))
       );
-      return SendSuccess(res, SuccessMessage.Login, data);
+      return SendSuccess(res, ResponseMessages.Success.Login, data);
     } catch (error) {
-      console.log(error);
-      return SendError(res, 500, ErrorMessage.ServerInternal, error);
+      return SendError(res, 500, ResponseMessages.Error.ServerInternal, error);
     }
   }
 
@@ -120,7 +121,7 @@ export default class UserController {
       const validate = await validateData({ email, newpassword });
       if (validate.length > 0) {
         console.log(validate);
-        return SendError(res, 400, ErrorMessage.BadRequest + validate.join(","));
+        return SendError(res, 400, ResponseMessages.Error.BadRequest + validate.join(","));
       }
       const prisma = new PrismaClient();
       const checkUser = await prisma.user.findFirst({
@@ -128,7 +129,7 @@ export default class UserController {
       });
 
       if (!checkUser) {
-        return SendError(res, 404, ErrorMessage.NotFound);
+        return SendError(res, 404, ResponseMessages.Error.NotFound);
       }
 
       const decryptPassword = await Encrypt(newpassword);
@@ -140,9 +141,9 @@ export default class UserController {
           password: decryptPassword,
         },
       });
-      return SendSuccess(res, SuccessMessage.Update, data);
+      return SendSuccess(res, ResponseMessages.Success.Update, data);
     } catch (error) {
-      return SendError(res, 500, ErrorMessage.ServerInternal, error);
+      return SendError(res, 500, ResponseMessages.Error.ServerInternal, error);
     }
   }
 
@@ -151,12 +152,12 @@ export default class UserController {
       const prisma = new PrismaClient();
       const users = await prisma.user.findMany();
       if (users.length === 0) {
-        return SendError(res, 404, ErrorMessage.NotFound, "user");
+        return SendError(res, 404, ResponseMessages.Error.NotFound, "user");
       }
-      return SendSuccess(res, SuccessMessage.SelectAll, users);
+      return SendSuccess(res, ResponseMessages.Success.SelectAll, users);
     } catch (error) {
       console.log(error);
-      return SendError(res, 500, ErrorMessage.ServerInternal, error);
+      return SendError(res, 500, ResponseMessages.Error.ServerInternal, error);
     }
   }
 
@@ -164,17 +165,17 @@ export default class UserController {
     try {
       const user_id = Number(req.params.user_id);
       if (isNaN(user_id)) {
-        return SendError(res, 400, ErrorMessage.BadRequest, "Invalid user_id");
+        return SendError(res, 400, ResponseMessages.Error.BadRequest, "Invalid user_id");
       }
       const prisma = new PrismaClient();
       const user = await prisma.user.findFirst({ where: { user_id: user_id } });
       if (!user) {
-        return SendError(res, 404, ErrorMessage.NotFound, "user");
+        return SendError(res, 404, ResponseMessages.Error.NotFound, "user");
       }
-      return SendSuccess(res, SuccessMessage.SelectOne, user);
+      return SendSuccess(res, ResponseMessages.Success.SelectOne, user);
     } catch (error) {
       console.log(error);
-      return SendError(res, 500, ErrorMessage.ServerInternal, error);
+      return SendError(res, 500, ResponseMessages.Error.ServerInternal, error);
     }
   }
 
@@ -182,16 +183,10 @@ export default class UserController {
     try {
       const user_id = Number(req.params.user_id);
       if (isNaN(user_id)) {
-        return SendError(res, 400, ErrorMessage.BadRequest, "Invalid user_id");
+        return SendError(res, 400, ResponseMessages.Error.BadRequest, "Invalid user_id");
       }
-      console.log("UPDATE HEADERS:", req.headers);
       if (!req.body) {
-        console.log("UPDATE ERROR: req.body is undefined");
-        return SendError(res, 400, ErrorMessage.BadRequest, "No body data received");
-      }
-      console.log("UPDATE BODY:", req.body);
-      if (req.file) {
-        console.log("UPDATE FILE:", req.file);
+        return SendError(res, 400, ResponseMessages.Error.BadRequest, "No body data received");
       }
       const {
         first_name,
@@ -204,7 +199,6 @@ export default class UserController {
       } = req.body;
       const prisma = new PrismaClient();
       const laosTime = getLaosTime();
-      // Get current user to keep old profile if no new file is uploaded
       const currentUser = await prisma.user.findFirst({ where: { user_id } });
       const profile = req.file ? req.file.path : (profileFromBody || (currentUser && currentUser.profile));
       const updatedUser = await prisma.user.update({
@@ -220,10 +214,10 @@ export default class UserController {
           updated_at: laosTime
         }
       });
-      return SendSuccess(res, SuccessMessage.Update, updatedUser);
+      return SendSuccess(res, ResponseMessages.Success.Update, updatedUser);
     } catch (error) {
-      console.log("UPDATE ERROR:", error, error?.message, error?.stack);
-      return SendError(res, 500, ErrorMessage.ServerInternal, error);
+      console.log("error:", error);
+      return SendError(res, 500, ResponseMessages.Error.ServerInternal, error);
     }
   }
 
@@ -231,17 +225,18 @@ export default class UserController {
     try {
       const user_id = Number(req.params.user_id);
       if (isNaN(user_id)) {
-        return SendError(res, 400, ErrorMessage.BadRequest, "Invalid user_id");
+        return SendError(res, 400, ResponseMessages.Error.BadRequest, "Invalid user_id");
       }
       const prisma = new PrismaClient();
       const user = await prisma.user.findFirst({ where: { user_id: user_id } });
       if (!user) {
-        return SendError(res, 404, ErrorMessage.NotFound, "user");
+        return SendError(res, 404, ResponseMessages.Error.NotFound, "user");
       }
+  await deleteCloudinaryImage(user.profile);
       const deletedUser = await prisma.user.delete({ where: { user_id: user_id } });
-      return SendSuccess(res, SuccessMessage.Delete, deletedUser);
+      return SendSuccess(res, ResponseMessages.Success.Delete, deletedUser);
     } catch (error) {
-      return SendError(res, 500, ErrorMessage.ServerInternal, error);
+      return SendError(res, 500, ResponseMessages.Error.ServerInternal, error);
     }
   }
 }

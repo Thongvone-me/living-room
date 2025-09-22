@@ -1,7 +1,6 @@
-
 import { PrismaClient } from "@prisma/client";
 import { SendSuccess, SendCreate, SendError } from "../service/response.js";
-import { validateData } from "../service/validate.js";
+import { validateData } from "../service/validateData.js";
 import { getLaosTime } from "../service/getLaosTime.js";
 
 export default class RoomController {
@@ -60,19 +59,9 @@ export default class RoomController {
 
   static async getOnlyStatus(req, res) {
     try {
-      const room_id = Number(req.params.room_id);
-      if (isNaN(room_id)) {
-        return SendError(res, 400, "BadRequest: Invalid room_id");
-      }
       const prisma = new PrismaClient();
-      const room = await prisma.room.findFirst({
-        where: { room_id },
-        select: { status: true }
-      });
-      if (!room) {
-        return SendError(res, 404, "NotFound: room");
-      }
-      return SendSuccess(res, "Room status fetched", room);
+      const rooms = await prisma.room.findMany({ select: { room_id: true, status: true } });
+      return SendSuccess(res, "All room statuses fetched", rooms);
     } catch (error) {
       return SendError(res, 500, "ServerInternal", error);
     }
@@ -117,4 +106,5 @@ export default class RoomController {
       return SendError(res, 500, "ServerInternal", error);
     }
   }
+
 }

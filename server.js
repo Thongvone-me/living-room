@@ -1,17 +1,27 @@
-
 import express from "express";
-import { PORT } from "./source/configuration/globalkey.js";
-import "./source/configuration/connect_database.js";
+import { PORT } from "./source/configuration/globalkeys.js";
+import "./source/configuration/databaseConnection.js";
+import cors from 'cors';
 import route from "./source/routes/routes.js";
+import rateLimit from 'express-rate-limit';
 
-const server = express();
+const app = express();
+const limiter = rateLimit({
+  windowMs: 10 * 60 * 1000, 
+  max: 20 
+});
 
-// Middleware
-server.use(express.json());
-server.use(express.urlencoded({ extended: true }));
+app.use(cors({
+  origin: ['http://localhost:5173'], 
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: true
+}));
 
-server.use("/api", route);
+app.use(limiter);
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use("/api", route);
 
-server.listen(PORT, () => {
-  console.log(`Server is running on port ${`http://localhost:${PORT}`}`);
+app.listen(PORT, () => {
+  console.log(`Server is running on port http://localhost:${PORT}`);
 });

@@ -1,7 +1,6 @@
-
 import express from "express";
 import multer from "multer";
-import { userStorage, tenantStorage } from "../configuration/cloudinary.js";
+import { userStorage, tenantStorage } from "../configuration/cloudinary.folderImage.js";
 import { authentication } from "../middleware/authentication.middleware.js";
 import { authorizeRoles } from "../middleware/authorization.middleware.js";
 import UserController from "../controller/user.controller.js";
@@ -13,18 +12,19 @@ import BookingController from "../controller/booking.controller.js";
 import StayController from "../controller/stay.controller.js";
 import PaymentController from "../controller/payment.controller.js";
 import NotificationController from "../controller/notification.controller.js";
-import { conditionalMulter } from "../middleware/conditionalMulter.js";
+import { conditionalUserMulter, conditionalTenantMulter } from "../middleware/conditionalMulter.js";
+
 const route = express.Router();
 
-
-const user = "/user";const uploadUser = multer({ storage: userStorage });
+const user = "/user";
+const uploadUser = multer({ storage: userStorage });
 route.post(`${user}/register`, uploadUser.single('profile'), UserController.Register);
 route.post(`${user}/login`, UserController.Login);
 route.put(`${user}/refreshToken`, authentication, UserController.RefreshToken);
 route.post(`${user}/forgotPassword`, UserController.ForgotPassword);
 route.get(`${user}/getAll`, authentication, authorizeRoles("admin"), UserController.getAll);
 route.get(`${user}/getOne/:user_id`, authentication, UserController.getById);
-route.put(`${user}/update/:user_id`, conditionalMulter, authentication, authorizeRoles("admin"), UserController.update);
+route.put(`${user}/update/:user_id`, conditionalUserMulter, authentication, authorizeRoles("admin"), UserController.update);
 route.delete(`${user}/delete/:user_id`, authentication, authorizeRoles("admin"), UserController.delete);
 
 const tenant = "/tenant";
@@ -32,7 +32,7 @@ const uploadTenant = multer({ storage: tenantStorage });
 route.post(`${tenant}/insert`, uploadTenant.single('profile'), authentication, TenantController.create);
 route.get(`${tenant}/getAll`, authentication, authorizeRoles("admin"), TenantController.getAll);
 route.get(`${tenant}/getOne/:tenant_id`, authentication, TenantController.getById);
-route.put(`${tenant}/update/:tenant_id`, authentication, authorizeRoles("admin"), TenantController.updateById);
+route.put(`${tenant}/update/:tenant_id`, conditionalTenantMulter, authentication, authorizeRoles("admin"), TenantController.updateById);
 route.delete(`${tenant}/delete/:tenant_id`, authentication, authorizeRoles("admin"), TenantController.delete);
 
 const roomtype = "/roomtype";
@@ -46,7 +46,7 @@ const room = "/room";
 route.post(`${room}/insert`, authentication, authorizeRoles("admin"), RoomController.create);
 route.get(`${room}/getAll`, RoomController.getAll);
 route.get(`${room}/getOne/:room_id`, RoomController.getById);
-route.get(`${room}/getStatus/:room_id`, RoomController.getOnlyStatus);
+route.get(`${room}/getStatus`, RoomController.getOnlyStatus);
 route.put(`${room}/update/:room_id`, authentication, authorizeRoles("admin"), RoomController.updateById);
 route.delete(`${room}/delete/:room_id`, authentication, authorizeRoles("admin"), RoomController.delete);
 

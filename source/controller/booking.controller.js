@@ -1,7 +1,7 @@
 
 import { PrismaClient } from "@prisma/client";
 import { SendSuccess, SendCreate, SendError } from "../service/response.js";
-import { validateData } from "../service/validate.js";
+import { validateData } from "../service/validateData.js";
 import { getLaosTime } from "../service/getLaosTime.js";
 
 export default class BookingController {
